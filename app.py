@@ -1,164 +1,84 @@
-# ==============================
-# Climate Insight Pro - App
-# ==============================
-
 import streamlit as st
-import pandas as pd
-import numpy as np
 import pickle
+import numpy as np
+import pandas as pd
 import plotly.express as px
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-# ==============================
-# Load Model
-# ==============================
+# Load model
 model = pickle.load(open("model.pkl", "rb"))
 
-# ==============================
-# Page Config
-# ==============================
-st.set_page_config(
-    page_title="Climate Insight Pro",
-    layout="wide",
-    page_icon="🌍"
-)
+# Load dataset
+data = pd.read_csv("weatherAUS.csv")
+data = data.dropna()
 
-# ==============================
-# Custom Styling
-# ==============================
-st.markdown("""
-    <style>
-    .main {
-        background-color: #0e1117;
-        color: white;
-    }
-    h1, h2, h3 {
-        color: #00adb5;
-    }
-    .stButton>button {
-        background-color: #00adb5;
-        color: white;
-        border-radius: 10px;
-        height: 3em;
-        width: 100%;
-        font-size: 18px;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# Page config
+st.set_page_config(page_title="Climate Insight Pro", layout="wide")
 
-# ==============================
-# Title Section
-# ==============================
-st.title("🌍 Climate Insight Pro")
-st.markdown("### AI Powered Rainfall Prediction Dashboard")
+st.title("🌍 Climate Insight Dashboard")
 
-# ==============================
-# Sidebar Navigation
-# ==============================
-page = st.sidebar.selectbox("📌 Navigation", [
-    "🏠 Home",
-    "📊 Prediction",
-    "📈 Insights",
-    "ℹ About"
-])
+# Sidebar
+st.sidebar.header("Input Weather Data")
 
-# ==============================
-# HOME PAGE
-# ==============================
-if page == "🏠 Home":
-    st.markdown("## Welcome 👋")
-    st.write("""
-    This project predicts **Rain Tomorrow** using Machine Learning.
+MinTemp = st.sidebar.slider("Min Temp", 0, 40, 15)
+MaxTemp = st.sidebar.slider("Max Temp", 0, 50, 25)
+Humidity9am = st.sidebar.slider("Humidity 9am", 0, 100, 50)
+Humidity3pm = st.sidebar.slider("Humidity 3pm", 0, 100, 50)
+Pressure9am = st.sidebar.slider("Pressure 9am", 900, 1100, 1000)
+Pressure3pm = st.sidebar.slider("Pressure 3pm", 900, 1100, 1000)
+Temp9am = st.sidebar.slider("Temp 9am", 0, 40, 20)
+Temp3pm = st.sidebar.slider("Temp 3pm", 0, 50, 25)
 
-    🔹 Built with: Streamlit + Scikit-learn  
-    🔹 Model: Random Forest  
-    🔹 Dataset: Weather Data  
+# Prediction
+if st.sidebar.button("Predict Rainfall"):
 
-    👉 Go to Prediction tab to try it live.
-    """)
+    input_data = np.array([[MinTemp, MaxTemp, Humidity9am, Humidity3pm,
+                            Pressure9am, Pressure3pm, Temp9am, Temp3pm]])
 
-# ==============================
-# PREDICTION PAGE
-# ==============================
-elif page == "📊 Prediction":
+    prediction = model.predict(input_data)[0]
+    prob = model.predict_proba(input_data)[0][1]
 
-    st.subheader("📥 Enter Weather Details")
+    st.subheader("🔍 Prediction Result")
 
-    col1, col2 = st.columns(2)
+    if prediction == 1:
+        st.success(f"🌧 Rain Expected (Confidence: {prob*100:.2f}%)")
+    else:
+        st.warning(f"☀ No Rain (Confidence: {(1-prob)*100:.2f}%)")
 
-    with col1:
-        mintemp = st.slider("Min Temperature", -10, 40, 15)
-        maxtemp = st.slider("Max Temperature", 0, 50, 25)
-        rainfall = st.slider("Rainfall", 0.0, 50.0, 0.0)
-        evaporation = st.slider("Evaporation", 0.0, 20.0, 5.0)
+# ---------------- EDA SECTION ---------------- #
 
-    with col2:
-        sunshine = st.slider("Sunshine", 0.0, 12.0, 7.0)
-        windspeed = st.slider("Wind Speed", 0, 100, 20)
-        humidity = st.slider("Humidity", 0, 100, 50)
-        pressure = st.slider("Pressure", 980, 1050, 1010)
+st.header("📊 Exploratory Data Analysis")
 
-    # Simple input (numeric only for now)
-    input_data = np.array([[mintemp, maxtemp, rainfall, evaporation,
-                            sunshine, windspeed, humidity, pressure]])
+# 1. Distribution
+st.subheader("Rainfall Distribution")
+fig1 = px.histogram(data, x="Rainfall", nbins=50)
+st.plotly_chart(fig1, use_container_width=True)
 
-    if st.button("🚀 Predict Rainfall"):
+# 2. Trend (Time Series)
+st.subheader("📈 Rainfall Trend")
 
-        prediction = model.predict(input_data)[0]
-        prob = model.predict_proba(input_data)[0][1]
+data["Date"] = pd.to_datetime(data["Date"])
+data = data.sort_values("Date")
 
-        st.markdown("---")
-        st.subheader("🔍 Prediction Result")
+st.line_chart(data["Rainfall"])
 
-        if prediction == 1:
-            st.success(f"🌧 Rain Expected (Confidence: {prob:.2f})")
-            st.progress(int(prob * 100))
-        else:
-            st.warning(f"☀ No Rain (Confidence: {1-prob:.2f})")
-            st.progress(int((1 - prob) * 100))
+# 3. Correlation Heatmap
+st.subheader("🔥 Correlation Heatmap")
 
+fig, ax = plt.subplots(figsize=(10, 6))
+sns.heatmap(data.select_dtypes(include=['float64','int64']).corr(), ax=ax)
+st.pyplot(fig)
 
-# ==============================
-# INSIGHTS PAGE
-# ==============================
-elif page == "📈 Insights":
+# 4. Feature Overview
+st.subheader("📊 Input Feature Overview")
 
-    st.subheader("📊 Sample Data Visualization")
+df = pd.DataFrame({
+    "Feature": ["MinTemp","MaxTemp","Humidity9am","Humidity3pm",
+                "Pressure9am","Pressure3pm","Temp9am","Temp3pm"],
+    "Value": [MinTemp,MaxTemp,Humidity9am,Humidity3pm,
+              Pressure9am,Pressure3pm,Temp9am,Temp3pm]
+})
 
-    # Dummy data for visualization (replace later with real dataset)
-    df = pd.DataFrame({
-        "Feature": ["Temp", "Humidity", "Pressure", "Rainfall"],
-        "Value": [25, 60, 1010, 5]
-    })
-
-    fig = px.bar(df, x="Feature", y="Value", color="Feature",
-                 title="Weather Overview")
-
-    st.plotly_chart(fig, use_container_width=True)
-
-
-# ==============================
-# ABOUT PAGE
-# ==============================
-elif page == "ℹ About":
-
-    st.markdown("""
-    ## About This Project
-
-    This is a Machine Learning web app built using:
-
-    - 🧠 Random Forest Classifier  
-    - 🌐 Streamlit UI  
-    - 📊 Plotly Visualizations  
-
-    ### Developer:
-    Om 🚀
-
-    ### Goal:
-    To predict rainfall and analyze climate patterns.
-    """)
-
-# ==============================
-# Footer
-# ==============================
-st.markdown("---")
-
+fig2 = px.bar(df, x="Feature", y="Value", color="Feature")
+st.plotly_chart(fig2, use_container_width=True)
